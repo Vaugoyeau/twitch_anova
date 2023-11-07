@@ -1,0 +1,228 @@
+---
+title: "Analyse des variances : ANOVA et Kruskal-Wallis"
+author: "Marie Vaugoyeau"
+date: "2023/11/07"
+date-format: "D MMMM YYYY"
+format: 
+  pdf:
+    toc: true
+    number-sections: true
+    papersize: letter
+execute: 
+  warning: false
+---
+  
+*Ce support, produit pour le live du [**11 novembre 2023 sur Twitch**](https://www.twitch.tv/videos/1971037323), est mis à disposition selon les termes de la [Licence Creative Commons Attribution 4.0 International](http://creativecommons.org/licenses/by/4.0/).*  
+  
+# Définition de l'ANOVA  
+  
+::: callout-tip
+## ANOVA : Analyse des variances  
+  
+Permet de savoir si **deux échantillons ou plus** sont issus d’une **même population** ou pour le dire autrement, les groupes créées ont-ils la **même moyenne**.  
+:::
+  
+L'ANOVA permet d'étudier l'influence d'au moins une **variable qualitative** ayant **deux modalités ou plus**, sur une **variable quantitative**.  
+D'un point de vue pratique, l'ANOVA cherche à savoir si les **moyennes des groupes** sont globalement **différentes** ou pour le dire autrement, si la **variation intragroupe est plus faible** que la **variation intergroupe**.  
+Le principe de l'ANOVA est de décomposer la **variabilité totale des données** en deux :  
+
+_ la **variabilité factorielle** : la variabilité entre groupes, c'est-à-dire la différence entre la moyenne de toutes les données et les moyennes de chaque groupe (cf. @fig-var-fact).  
+_ la **variabilité résiduelle** : la variabilité qui reste une fois que la variabilité due au groupe est retirée c'est-à-dire la différence entre la moyenne du groupe et la valeur de chaque échantillon (cf. @fig-var-res).  
+  
+```{r}
+#| label: calcul des moyennes pour le jdd iris
+library(tidyverse)
+
+iris_moyenne <- iris |> 
+  group_by(Species) |> 
+  summarise(moyenne = mean(Sepal.Length))
+```
+
+  
+```{r}
+#| label: fig-var-fact
+#| fig-cap: "Variabilité factorielle"
+
+ggplot(iris) +
+  aes(x = Species, y = Sepal.Length, color = Species) +
+  geom_jitter(alpha = 0.3) +
+  geom_hline(aes(yintercept = mean(Sepal.Length))) +
+  geom_errorbar(aes(ymin = moyenne, y = 5.84, ymax = moyenne), data = iris_moyenne, size = 1) +
+  geom_spoke(aes(y = moyenne, radius = mean(iris$Sepal.Length) - moyenne, angle = 1.57), data = iris_moyenne, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+#| label: fig-var-res
+#| fig-cap: "Variabilité résiduelle"
+
+ggplot(iris) +
+  aes(x = Species, y = Sepal.Length, color = Species) +
+  geom_jitter(alpha = 0.3) +
+  geom_errorbar(aes(ymin = moyenne, y = 5.84, ymax = moyenne), data = iris_moyenne, size = 1) +
+  geom_spoke(aes(radius = iris_moyenne$moyenne - Sepal.Length, angle = 1.57), data = iris  |> group_by(Species) |> slice(3) |> ungroup(), linetype = "dashed") +
+    geom_spoke(aes(radius = iris_moyenne$moyenne - Sepal.Length, angle = 1.57), data = iris %>% group_by(Species) |> slice(11) |> ungroup(), linetype = "dashed") +
+  geom_point(data = iris |> group_by(Species) |> slice(c(3, 11)) |> ungroup()) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+```
+  
+# Les limites d'utilisations  
+## Indépendance des données  
+Les données doivent provenir d'un échantillonnage aléatoire et les groupes doivent-être indépendants entre eux.  
+
+## Normalité des données  
+Les données au sein de chaque groupe doivent suivre une loi normale ou être approximé par une loi normale (n > 30).   
+  
+```{r}
+#| label: normalite-des-donnees
+
+shapiro.test(iris$Sepal.Length)
+# les données ne suivent pas une loi normale
+
+map(
+  .x = c(iris$Species |> levels()),
+  .f = ~shapiro.test(filter(iris, Species == .x)$Sepal.Length)
+    )
+# les données au sein de chaque groupe suivent des lois normales
+```
+  
+## Homogénéité des variances  
+Les groupes doivent avoir une variance similaire.  
+Le test de Bartlett permet de tester la variance de plus de deux groupes.  
+```{r}
+#| label: egalite-des-variances
+
+bartlett.test(Sepal.Length ~ Species, data = iris)
+
+iris |> 
+  left_join(iris_moyenne) |> 
+  mutate(sepal_length_centre = Sepal.Length - moyenne) |> 
+  ggplot() +
+  aes(x = Species, color = Species, y = sepal_length_centre) +
+  geom_jitter() +
+  theme_classic()
+
+```
+
+::: callout-warning
+Il ne faut pas faire d'ANOVA ici, les groupes n'ont pas la même variance !  
+:::
+  
+# Réalisation d'une ANOVA  
+Comme la longueur des sépales ne peut pas être utilisée, on va le faire sur la largeur des sépales.  
+  
+## Vérification des données   
+```{r}
+#| label: normalité et homogénéité
+map(
+  .x = c(iris$Species |> levels()),
+  .f = ~shapiro.test(filter(iris, Species == .x)$Sepal.Width)
+    )
+
+bartlett.test(Sepal.Width ~Species, data = iris)
+
+```
+
+Les données suivent des lois normales et les variances sont similaires.  
+  
+## Réalisation de l'ANOVA  
+  
+::: callout-important
+
+La détermination d'un modèle ANOVA doit-être réalisé avec la fonction `aov()` du package `{stats}`. Les fonctions `anova()` du package `{stats}` ou `Anova()` du package `{car}` permet de réaliser une analyse de variance/déviance sur un modèle donc par exemple le résultat de `aov()` mais pas que ^^  
+:::  
+
+```{r}
+#| label: anova
+
+anova_sepal_largeur <- aov(Sepal.Width ~ Species, data  = iris)
+
+summary(anova_sepal_largeur)
+anova(anova_sepal_largeur)
+```
+
+## Test post-hoc de Tukey  
+Afin de savoir quel(s) groupe(s) est(sont) différent(s), il faut utiliser un test post-hoc de Tukey.  
+```{r}
+#| label: test-post-hoc-tukey
+TukeyHSD(anova_sepal_largeur)
+
+rstatix::tukey_hsd(anova_sepal_largeur)
+
+ggplot(iris) +
+  aes(x = Species, color = Species, y = Sepal.Width) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.3) +
+  theme_light()
+
+```
+  
+# Réalisation d'une ANOVA non paramétrique : test de Kruskal-Wallis  
+Réalisation sur les longueurs de sépales qui ne sont pas homogènes entre les groupes  
+  
+## Fonctionnement et limites  
+
+::: callout-tip
+## Kruskal-Wallis    
+  
+Permet de savoir si **deux échantillons ou plus** sont issus d’une **même population** ou pour le dire autrement, les groupes créées ont-ils la **même médiane**.  
+:::
+
+Le test de Kruskal-Wallis se base sur le rang des données.  
+```{r}
+#| label: rang-des-donness
+
+iris |> 
+  arrange(Sepal.Length) |> 
+  rowid_to_column(var = "rang") |> 
+  group_by(Species) |> 
+  summarise(somme_rang = sum(rang)) |> 
+  ungroup()
+
+```
+
+Une fois que le rang de chaque groupe calculé, la statistique de test va être calculé et comparer à une valeur seuil.  
+
+::: callout-warning
+## Les limites    
+  
+_ échantillonnage aléatoire  
+_ indépendance des groupes  
+_ Plus de 5 observations par groupe  
+:::
+
+## Utilisation de la fonction `kruskal.test()` du package `{stats}`  
+Comme la longueur des sépales n'avaient pas la même variance en fonction de l'espèce, il n'est pas possible de réaliser une ANOVA.  
+Le test de Kruskal-Wallis est conseillé ici.  
+
+```{r}
+#| label: krusal-wallis
+
+kruskal.test(Sepal.Length ~ Species, data  = iris)
+
+```
+
+## Test-post hoc de Nemenyi  
+```{r}
+#| label: test-post-hoc-nemenyi
+
+summary(
+  PMCMRplus::kwAllPairsNemenyiTest(
+    data = iris,
+    Sepal.Length ~ Species
+  )
+)
+
+ggplot(iris) +
+  aes(x = Species, color = Species, y = Sepal.Length) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.3) +
+  theme_bw()
+
+```
+
+  
