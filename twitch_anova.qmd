@@ -46,9 +46,26 @@ iris_moyenne <- iris |>
 ggplot(iris) +
   aes(x = Species, y = Sepal.Length, color = Species) +
   geom_jitter(alpha = 0.3) +
-  geom_hline(aes(yintercept = mean(Sepal.Length))) +
-  geom_errorbar(aes(ymin = moyenne, y = 5.84, ymax = moyenne), data = iris_moyenne, size = 1) +
-  geom_spoke(aes(y = moyenne, radius = mean(iris$Sepal.Length) - moyenne, angle = 1.57), data = iris_moyenne, linetype = "dashed") +
+  geom_hline(
+    aes(yintercept = mean(Sepal.Length))
+    ) +
+  geom_errorbar(
+    aes(
+      ymin = moyenne, 
+      y = 5.84, ymax = moyenne
+      ), 
+    data = iris_moyenne, 
+    size = 1
+    ) +
+  geom_spoke(
+    aes(
+      y = moyenne, 
+      radius = mean(iris$Sepal.Length) - moyenne, 
+      angle = 1.57
+      ), 
+    data = iris_moyenne, 
+    linetype = "dashed"
+    ) +
   theme_classic() +
   theme(legend.position = "none")
 
@@ -61,10 +78,43 @@ ggplot(iris) +
 ggplot(iris) +
   aes(x = Species, y = Sepal.Length, color = Species) +
   geom_jitter(alpha = 0.3) +
-  geom_errorbar(aes(ymin = moyenne, y = 5.84, ymax = moyenne), data = iris_moyenne, size = 1) +
-  geom_spoke(aes(radius = iris_moyenne$moyenne - Sepal.Length, angle = 1.57), data = iris  |> group_by(Species) |> slice(3) |> ungroup(), linetype = "dashed") +
-    geom_spoke(aes(radius = iris_moyenne$moyenne - Sepal.Length, angle = 1.57), data = iris %>% group_by(Species) |> slice(11) |> ungroup(), linetype = "dashed") +
-  geom_point(data = iris |> group_by(Species) |> slice(c(3, 11)) |> ungroup()) +
+  geom_errorbar(
+    aes(
+      ymin = moyenne, 
+      y = 5.84, 
+      ymax = moyenne
+      ), 
+    data = iris_moyenne, 
+    size = 1
+    ) +
+  geom_spoke(
+    aes(
+      radius = iris_moyenne$moyenne - Sepal.Length, 
+      angle = 1.57
+      ), 
+    data = iris  |> 
+      group_by(Species) |> 
+      slice(3) |> 
+      ungroup(), 
+    linetype = "dashed"
+    ) +
+    geom_spoke(
+      aes(
+        radius = iris_moyenne$moyenne - Sepal.Length, 
+        angle = 1.57
+        ), 
+      data = iris |> 
+        group_by(Species) |> 
+        slice(11) |> 
+        ungroup(), 
+      linetype = "dashed"
+      ) +
+  geom_point(
+    data = iris |> 
+      group_by(Species) |> 
+      slice(c(3, 11)) |> 
+      ungroup()
+    ) +
   theme_classic() +
   theme(legend.position = "none")
 
@@ -143,8 +193,48 @@ anova_sepal_largeur <- aov(Sepal.Width ~ Species, data  = iris)
 
 summary(anova_sepal_largeur)
 anova(anova_sepal_largeur)
+
 ```
 
+::: callout-important
+## Oublié dans le [live](https://www.twitch.tv/videos/1971037323)  
+
+J'ai oublié de le préciser dans le [live](https://www.twitch.tv/videos/1971037323) sur twitch mais il faut penser à vérifier que les résidus (la différence entre les valeurs prédites et observées) suivent une loi normales et soient homogènes !  
+:::  
+  
+```{r}
+#| label: verifier-la-normalite-des-donnees
+
+shapiro.test(anova_sepal_largeur$residuals)
+
+bartlett.test(anova_sepal_largeur$residuals ~ iris$Species)
+```
+Les **résidus** suivent bien une **loi normale** et sont **homogènes** donc le **modèle est validé**.    
+  
+Il est aussi possible de le vérifier graphiquement grâce à la fonction `plot()` appliquée sur le modèle ajusté.  
+  
+```{r}
+#| label: fig-verifier-la-validite-du-modele
+#| fig-cap: "Vérification graphique du modèle"
+#| fig-subcap: 
+#|   - "Résidus en fonction des valeurs prédites"
+#|   - "QQplot : Vérification de la normalité des résidus"
+#|   - "Vérification de l'homogénéité des variances"
+#|   - "Vérification de l'effet de levier des individus"
+#| layout-ncol: 2
+
+
+plot(anova_sepal_largeur)
+
+```
+
+Pour la vérification graphique :  
+
+_ Le QQ-plot, @fig-verifier-la-validite-du-modele-2 montre que les résidus suivent une loi normale  
+_ La @fig-verifier-la-validite-du-modele-3 montre que les résidus sont homogènes  
+  
+**L'ANOVA réalisée est donc validée !**  
+  
 ## Test post-hoc de Tukey  
 Afin de savoir quel(s) groupe(s) est(sont) différent(s), il faut utiliser un test post-hoc de Tukey.  
 ```{r}
